@@ -82,4 +82,163 @@ const W=()=>Object.entries(S.w).sort((a,b)=>a[0]<b[0]?-1:1).map(([d,v])=>[parse(
 const ma7=w=>w.map(p=>{const s=w.filter(q=>q[0]<=p[0]&&q[0]>p[0]-7*864e5);return[p[0],s.reduce((a,q)=>a+q[1],0)/s.length]});
 function rate(){const w=W();if(w.length<3)return null;const last=w[w.length-1][0],r=w.filter(p=>p[0]>=last-28*864e5);
  if(r.length<3||r[r.length-1][0]-r[0][0]<10*864e5)return null;
- const n=r.length,xs=r.map(p=>(p[0]-r[0][0])/864e5)
+ const n=r.length,xs=r.map(p=>(p[0]-r[0][0])/864e5),ys=r.map(p=>p[1]),mx=xs.reduce((a,b)=>a+b)/n,my=ys.reduce((a,b)=>a+b)/n;
+ let nu=0,de=0;xs.forEach((x,i)=>{nu+=(x-mx)*(ys[i]-my);de+=(x-mx)**2});return de?nu/de*30:null}
+function advice(){const r=rate();
+ if(r===null)return"Log weight 3+ times over 10+ days (same time daily, morning after toilet) to get a reliable rate.";
+ if(r<0.8)return`${r.toFixed(2)} kg/month is too slow. Add ~250 kcal/day (extra glass of milk + 1 tbsp peanut butter, or +1 banana).`;
+ if(r>2.2)return`${r.toFixed(2)} kg/month is fast, so some of it is probably fat. Trim ~200 kcal/day (less rice or peanut butter).`;
+ return`${r.toFixed(2)} kg/month is on target. Keep the plan.`}
+function weekly(){const w=W();if(!w.length)return[];const t0=w[0][0],o={};
+ w.forEach(p=>{const k=Math.floor((p[0]-t0)/(7*864e5));(o[k]=o[k]||[]).push(p[1])});
+ let prev=null;return Object.keys(o).map(Number).sort((a,b)=>a-b).map(k=>{const a=o[k].reduce((x,y)=>x+y)/o[k].length,r={k:k+1,a,d:prev===null?null:a-prev};prev=a;return r}).slice(-8)}
+function mfl(k){const e=Object.entries(S.m).sort((a,b)=>a[0]<b[0]?-1:1).filter(([_,v])=>v[k]>0);return e.length?[e[0][1][k],e[e.length-1][1][k]]:null}
+
+/* training maths */
+function lastSess(n){const ds=Object.keys(S.d).filter(x=>x<date&&done((S.d[x].ex||{})[n]).length).sort();const x=ds[ds.length-1];return x?{d:x,s:done(S.d[x].ex[n])}:null}
+function tip(n,l){const e=EX[n];if(!l)return`First time: pick a load you can lift for ${e.lo} clean reps with a 4s lowering.`;
+ if(l.s.length>=e.sets&&l.s.every(s=>s.r>=e.hi))return`All sets hit ${e.hi}. Next: 5s lowering, add a 1s pause at the stretch, or switch to a harder variant.`;
+ return`Beat last time: aim for ${Math.min(...l.s.map(s=>s.r))+1}+ reps on every set.`}
+function exHist(n){return Object.keys(S.d).sort().map(s=>{const a=done((S.d[s].ex||{})[n]);return a.length?[parse(s).getTime(),Math.max(...a.map(x=>x.k>0?x.k*(1+x.r/30):x.r))]:null}).filter(Boolean)}
+
+/* handlers */
+function go(t){tab=t;render();scrollTo(0,0)}
+function goDay(s){if(!s)return;date=s;tab="today";render();scrollTo(0,0)}
+function sh(n){date=addDays(date,n);render()}
+function tm(i,v){D().meals[i]=v?1:0;save();render()}
+function tc(v){D().cr=v?1:0;save()}
+function wt(n){const d=D();d.water=Math.max(0,d.water+n);save();render()}
+function sl(v){D().sleep=v;save()}
+function setW(v){v?S.w[date]=+v:delete S.w[date];save()}
+function setType(t){D().type=t=="R"?null:t;save();render()}
+function setMode(m){S.s.mode=m;save();render()}
+function setS(k,v){S.s[k]=v===""?(k=="start"?null:DEF.s[k]):+v;save()}
+function ss(n,i,f,v){const d=D();const a=d.ex[n]=d.ex[n]||[];a[i]=a[i]||{};a[i][f]=v===""?undefined:+v;save()}
+function fill(n,i){const e=EX[n],l=lastSess(n),d=D();const a=d.ex[n]=d.ex[n]||[];const s=a[i]=a[i]||{};
+ const ls=l?(l.s[i]||l.s[l.s.length-1]):{};
+ if(s.k===undefined)s.k=ls.k||0;if(!(s.r>0))s.r=ls.r||e.lo;save();rest(S.s.rest);render()}
+function saveM(){const o=S.m[date]||{};MF.forEach(([k])=>{const v=$("m_"+k).value;if(v)o[k]=+v});S.m[date]=o;save();render()}
+function clr(){if(confirm("Clear all data for "+date+"?")){delete S.d[date];delete S.w[date];delete S.m[date];save();render()}}
+function exp(){S.s.bk=Date.now();save();navigator.clipboard.writeText(JSON.stringify(S)).then(()=>alert("Backup copied. Paste it into Notes."))}
+function dl(){S.s.bk=Date.now();save();const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:"application/json"}));a.download="leanbulk-"+iso(new Date())+".json";a.click()}
+function imp(){const t=prompt("Paste backup JSON (replaces current data)");if(t)ld(t)}
+function impF(el){const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=()=>ld(r.result);r.readAsText(f)}
+function ld(t){try{const o=JSON.parse(t);if(!o.d||!o.w)throw 0;localStorage.setItem("lb2",t);S=load();render();alert("Restored")}catch(e){alert("Invalid backup")}}
+function reset(){if(confirm("Erase ALL data?")&&confirm("Really? This cannot be undone.")){localStorage.removeItem("lb2");S=load();render()}}
+
+/* rest timer */
+let rt=null,re=0;
+function rest(sec){clearInterval(rt);re=Date.now()+sec*1000;const el=$("rest");el.style.display="flex";
+ rt=setInterval(()=>{const l=Math.ceil((re-Date.now())/1000);
+  if(l<=0){clearInterval(rt);el.innerHTML="Rest over, go! <button onclick=hideRest()>OK</button>";try{navigator.vibrate([300,100,300])}catch(e){}return}
+  el.innerHTML="Rest "+Math.floor(l/60)+":"+String(l%60).padStart(2,"0")+" <button onclick=hideRest()>Skip</button>"},250)}
+function hideRest(){clearInterval(rt);$("rest").style.display="none"}
+
+/* chart */
+function plot(id,series){const c=$(id);if(!c)return;const dpr=devicePixelRatio||1,Wd=c.clientWidth,H=c.clientHeight;
+ c.width=Wd*dpr;c.height=H*dpr;const x=c.getContext("2d");x.scale(dpr,dpr);
+ const all=series.flatMap(s=>s.p);if(!all.length)return;
+ let t0=Math.min(...all.map(p=>p[0])),t1=Math.max(...all.map(p=>p[0]));if(t1-t0<7*864e5)t1=t0+7*864e5;
+ let mn=Math.min(...all.map(p=>p[1])),mx=Math.max(...all.map(p=>p[1]));const pad=(mx-mn)*.15||1;mn-=pad;mx+=pad;
+ const L=34,B=20,X=t=>L+(t-t0)/(t1-t0)*(Wd-L-8),Y=v=>H-B-(v-mn)/(mx-mn)*(H-B-8);
+ x.font="11px system-ui";x.lineWidth=1;
+ for(let i=0;i<=4;i++){const v=mn+(mx-mn)*i/4;x.strokeStyle="#222";x.beginPath();x.moveTo(L,Y(v));x.lineTo(Wd-8,Y(v));x.stroke();x.fillStyle="#8a8a93";x.fillText(v.toFixed(1),0,Y(v)+4)}
+ const f=t=>new Date(t).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+ x.fillStyle="#8a8a93";x.fillText(f(t0),L,H-5);x.textAlign="right";x.fillText(f(t1),Wd-8,H-5);x.textAlign="left";
+ series.forEach(s=>{x.strokeStyle=x.fillStyle=s.c;x.lineWidth=s.w||2;x.setLineDash(s.dash||[]);
+  if(s.line!==false){x.beginPath();s.p.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.stroke()}
+  x.setLineDash([]);if(s.dots)s.p.forEach(p=>{x.beginPath();x.arc(X(p[0]),Y(p[1]),3,0,7);x.fill()})})}
+function drawProg(){const w=W();
+ if(w.length){const m=ma7(w),w0=S.s.start||w[0][1],t0=w[0][0],tE=Math.max(w[w.length-1][0],t0+7*864e5);
+  plot("cw",[{p:w.map(p=>[p[0],p[1]]),c:"#5b7a90",line:false,dots:true},{p:m,c:"#38bdf8",w:2.5},{p:[[t0,w0],[tE,w0+S.s.rate*(tE-t0)/864e5/30]],c:"#34d399",dash:[5,5],w:1.5}])}
+ plot("cs",[{p:exHist(pe),c:"#fbbf24",dots:true}])}
+
+/* views */
+function vToday(){const d=peek(),t=tot(date),pl=plan();
+ let h=needBk()?`<div class=card style="border:1px solid #fbbf24"><small>⚠️ No backup in 14+ days. Go to More → Backup.</small></div>`:"";
+ h+=`<div class=row><button onclick="sh(-1)">◀</button><input type=date value="${date}" onchange="goDay(this.value)" style="text-align:center"><button onclick="sh(1)">▶</button></div>
+ <div class=card style="margin-top:10px"><div class="row sp"><b>${t.k} / ${pl.k} kcal</b><span class=m>🔥 ${streak()}-day streak</span></div>${bar(t.k/pl.k)}
+ <div style="margin-top:8px"><b>${t.p} / ${pl.p} g protein</b></div>${bar(t.p/pl.p)}</div><h2>Meals</h2><div class=card>`;
+ MEALS.forEach((m,i)=>{const mi=mealInfo(i);h+=`<label class=row style="padding:8px 0"><input type=checkbox ${d.meals[i]?"checked":""} onchange="tm(${i},this.checked)"><span><b>${m.n}</b><br><small>${mi.k} kcal · ${mi.p}g protein</small></span></label>`});
+ h+=`<label class=row style="padding:8px 0"><input type=checkbox ${d.cr?"checked":""} onchange="tc(this.checked)"><span><b>Creatine 3g</b><br><small>with the evening snack</small></span></label></div>
+ <h2>Water & sleep</h2><div class=card><div class="row sp"><button onclick="wt(-1)">−</button><b>${d.water} / ${S.s.water} glasses (${(d.water*.25).toFixed(2)} L)</b><button onclick="wt(1)">+</button></div>${bar(d.water/S.s.water)}
+ <div class=row style="margin-top:10px"><small style="flex:1">Sleep (hours)</small><input type=number step=0.5 inputmode=decimal style="width:90px" value="${d.sleep}" onchange="sl(this.value)"></div></div>
+ <h2>Body weight</h2><div class=card><input type=number step=0.1 inputmode=decimal value="${S.w[date]||""}" placeholder="kg · morning, after toilet" onchange="setW(this.value)"></div>
+ <h2>Workout</h2><div class=card onclick="go('train')"><b>${d.type?PLAN[d.type].n:"Rest day"}</b><br><small>${d.type?(vol(d)?"Logged · volume "+vol(d):"Tap to log sets"):"Recover: sleep and full meals"}</small></div>
+ <br><button onclick="clr()">Clear this day</button>`;return h}
+
+function vDiet(){const pl=plan();
+ let h=`<div class=card><b>Plan ≈ ${pl.k} kcal · ${pl.p}g protein</b><br><small>Estimates, ±10%. Protein ≈ 1.8 g/kg at 60 kg.</small></div>
+ <h2>Diet type</h2><div class=row>${[["veg","Veg"],["egg","Egg"],["non","Non-veg"]].map(([k,l])=>`<button style="flex:1" class="${S.s.mode==k?"on":""}" onclick="setMode('${k}')">${l}</button>`).join("")}</div><h2>Meals</h2>`;
+ MEALS.forEach((m,i)=>{const mi=mealInfo(i);h+=`<div class=card><div class="row sp"><b>${m.n}</b><span class=m>${mi.k} kcal · ${mi.p}g</span></div><small>${m.t}</small><ul style="margin:6px 0 0;padding-left:18px">${mi.it.map(x=>`<li>${x}</li>`).join("")}</ul></div>`});
+ return h+`<h2>Rules</h2><div class=card><ul style="margin:0;padding-left:18px;line-height:1.6">
+ <li>Always boil packet milk before drinking.</li><li>Four meals at fixed times, don't skip.</li>
+ <li>Water: about 3 L/day (12 glasses).</li><li>Sleep 7–9h, since growth happens in recovery.</li>
+ <li>Weigh daily, same time. Judge by the weekly average, not one day.</li>
+ <li>Low appetite: add a glass of milk, a banana or a handful of peanuts.</li>
+ <li>Creatine 3g daily, also on rest days. If you have any kidney issue, ask a doctor first.</li>
+ <li>Too slow (&lt;0.8 kg/month): +250 kcal. Too fast (&gt;2.2): −200 kcal.</li></ul></div>`}
+
+function exCard(n){const e=EX[n],d=peek(),arr=d.ex[n]||[],l=lastSess(n);
+ let h=`<div class=card><div class="row sp"><b>${n}</b><a href="https://www.youtube.com/results?search_query=${encodeURIComponent(n+" form")}" target=_blank>▶ demo</a></div>
+ <small>${e.m} · ${e.sets} × ${e.r||e.lo+"-"+e.hi} · 4s lowering</small>
+ <details><summary>Form cues</summary><small>${e.c}</small></details>
+ <div class=m style="margin:6px 0">${l?"Last ("+fd(l.d,{day:"numeric",month:"short"})+"): "+l.s.map(s=>s.k+"×"+s.r).join(", ")+"<br>":""}💡 ${tip(n,l)}</div>
+ <div class=set><small></small><small>kg</small><small>reps</small><small></small></div>`;
+ for(let i=0;i<e.sets;i++){const s=arr[i]||{},ls=l?(l.s[i]||l.s[l.s.length-1]):{};
+  h+=`<div class=set><small>${i+1}</small><input type=number inputmode=decimal step=0.5 placeholder="${ls.k!==undefined?ls.k:"kg"}" value="${s.k!==undefined?s.k:""}" onchange="ss('${n}',${i},'k',this.value)"><input type=number inputmode=numeric placeholder="${ls.r||e.lo}" value="${s.r||""}" onchange="ss('${n}',${i},'r',this.value)"><button class="${s.r>0?"p":""}" onclick="fill('${n}',${i})">✓</button></div>`}
+ return h+`</div>`}
+
+function vTrain(){const d=peek();
+ let h=`<div class="row sp"><button onclick="sh(-1)">◀</button><b>${fd(date,{weekday:"long",day:"numeric",month:"short"})}</b><button onclick="sh(1)">▶</button></div>
+ <div class=row style="margin:10px 0">${["A","B","C","R"].map(t=>`<button style="flex:1" class="${(d.type||"R")==t?"on":""}" onclick="setType('${t}')">${t=="R"?"Rest":t}</button>`).join("")}</div>
+ <div class=row style="margin-bottom:8px"><small>Rest timer:</small>${[60,90,120].map(s=>`<button class="${S.s.rest==s?"on":""}" onclick="S.s.rest=${s};save();render()">${s}s</button>`).join("")}</div>`;
+ if(!d.type)return h+`<div class=card>Rest day. Eat the full plan, sleep 8h, optional 20-min walk.</div>`;
+ h+=`<h2>${PLAN[d.type].n}</h2>`;PLAN[d.type].d.forEach(n=>h+=exCard(n));
+ return h+`<div class=card><b>Volume today: ${vol(d)}</b><br><small>Tap ✓ to log a set (it copies last session's numbers if blank) and start the rest timer. Edit kg/reps if different.</small></div>
+ <h2>Progression ladder</h2><div class=card><small>With only 10 kg dumbbells and a 12 kg bar:<br>1) Reps to the top of the range on all sets<br>2) Tempo 4s → 5s lowering<br>3) 1s pause at the stretch<br>4) Harder variant (single-leg, one-arm, feet elevated)<br>Deload every 6th week: half the sets. Plates or adjustable dumbbells are the next upgrade.</small></div>`}
+
+function stats(){let k=0,p=0,wc=0,wa=0,n=0;const t=iso(new Date());
+ for(let i=0;i<28;i++){const s=addDays(t,-i),d=S.d[s];if(!d)continue;n++;const x=tot(s);k+=x.k;p+=x.p;wa+=d.water;if(vol(d)>0)wc++}
+ return{n,k:n?Math.round(k/n):0,p:n?Math.round(p/n):0,wc,wa:n?(wa/n).toFixed(1):0}}
+function vProg(){const w=W();let h="";
+ if(!w.length)h+=`<div class=card>Log body weight on the Today tab to see trends.</div>`;
+ else{const m=ma7(w),w0=S.s.start||w[0][1],now=m[m.length-1][1],r=rate(),df=now-w0;
+  h+=`<div class="card g4"><div><small>Start</small><br><b>${w0.toFixed(1)}</b></div><div><small>Now (7d)</small><br><b>${now.toFixed(1)}</b></div><div><small>Change</small><br><b>${(df>=0?"+":"")+df.toFixed(1)}</b></div><div><small>kg/month</small><br><b>${r===null?"–":r.toFixed(2)}</b></div></div>
+  <div class=card><canvas id=cw></canvas><small>Dots: daily · blue: 7-day avg · green dashed: ${S.s.rate} kg/month target</small></div>
+  <div class=card>💡 ${advice()}<br><small>The first 2 weeks include creatine/carb water gain, so judge pace from week 3.</small></div>
+  <h2>Weekly averages</h2><div class=card>`+weekly().map(x=>`<div class="row sp"><span>Week ${x.k}</span><b>${x.a.toFixed(1)} kg</b><span style="color:${x.d>0?"#34d399":x.d<0?"#f87171":"#8a8a93"}">${x.d===null?"–":(x.d>0?"+":"")+x.d.toFixed(2)}</span></div>`).join("")+`</div>`}
+ h+=`<h2>Measurements (cm) · ${date}</h2><div class=card>`+MF.map(([k,l])=>`<div class="row sp" style="margin-bottom:6px"><small>${l}</small><input id=m_${k} type=number step=0.1 inputmode=decimal style="width:100px" value="${(S.m[date]||{})[k]||""}"></div>`).join("")+`<button class=p onclick="saveM()">Save measurements</button></div>`;
+ const rows=MF.map(([k,l])=>{const f=mfl(k);return f?`<div class="row sp"><span>${l}</span><span>${f[0]} → <b>${f[1]}</b></span><span class=m>${(f[1]-f[0]>=0?"+":"")+(f[1]-f[0]).toFixed(1)}</span></div>`:""}).join("");
+ const a=mfl("sh"),b=mfl("wa");
+ if(rows)h+=`<div class=card>${rows}${a&&b?`<hr style="border:0;border-top:1px solid #222"><div class="row sp"><span>Shoulder : waist</span><b>${(a[1]/b[1]).toFixed(2)}</b></div><small>Started at ${(a[0]/b[0]).toFixed(2)}. Higher means more V-taper. Measure shoulders at the widest point, waist at the navel, relaxed.</small>`:""}</div>`;
+ h+=`<h2>Strength trend</h2><div class=card><select onchange="pe=this.value;render()">${Object.keys(EX).map(n=>`<option ${n==pe?"selected":""}>${n}</option>`).join("")}</select>`+(exHist(pe).length?`<canvas id=cs></canvas><small>Best set per session (est. 1RM; reps for bodyweight)</small>`:`<br><small>No logged sets yet.</small>`)+`</div>`;
+ const st=stats();
+ return h+`<h2>Last 28 days (logged days)</h2><div class=card><div class="row sp"><span>Days logged</span><b>${st.n}</b></div><div class="row sp"><span>Workouts logged</span><b>${st.wc}</b></div><div class="row sp"><span>Avg kcal</span><b>${st.k}</b></div><div class="row sp"><span>Avg protein</span><b>${st.p} g</b></div><div class="row sp"><span>Avg water</span><b>${st.wa} glasses</b></div></div>`}
+
+function vHist(){const today=iso(new Date());let g="";
+ for(let i=27;i>=0;i--){const s=addDays(today,-i),d=S.d[s],n=d?d.meals.filter(Boolean).length:0;
+  const col=n>=4?"#34d399":n>=2?"#fbbf24":d?"#f87171":"#222227",ring=d&&vol(d)>0?";box-shadow:0 0 0 2px #38bdf8":"";
+  g+=`<span class=dot style="background:${col}${ring};margin:4px" onclick="goDay('${s}')"></span>`}
+ const keys=[...new Set([...Object.keys(S.d),...Object.keys(S.w)])].sort().reverse();
+ let h=`<div class=card><small>Last 28 days · green 4 meals, yellow 2–3, red &lt;2 · blue ring = trained · tap to open</small><div style="margin-top:8px">${g}</div></div><h2>Log (${keys.length} days)</h2>`;
+ keys.forEach(s=>{const d=S.d[s],t=tot(s),n=d?d.meals.filter(Boolean).length:0,v=d?vol(d):0;
+  h+=`<div class=card onclick="goDay('${s}')"><div class="row sp"><b>${fd(s,{weekday:"short",day:"numeric",month:"short",year:"2-digit"})}</b><b>${S.w[s]?S.w[s]+" kg":""}</b></div><small>${d?`${n}/4 meals · ${t.k} kcal · ${t.p}g P · 💧${d.water}${d.sleep?" · 😴"+d.sleep+"h":""}${d.type?" · Workout "+d.type+(v?" ("+v+" vol)":" (not logged)"):" · Rest"}`:"weight only"}</small></div>`});
+ return h}
+
+function vMore(){return `<h2>Settings</h2><div class=card>
+ <div class="row sp"><small>Target gain (kg/month)</small><input type=number step=0.1 style="width:90px" value="${S.s.rate}" onchange="setS('rate',this.value)"></div><br>
+ <div class="row sp"><small>Water goal (250 ml glasses)</small><input type=number style="width:90px" value="${S.s.water}" onchange="setS('water',this.value)"></div><br>
+ <div class="row sp"><small>Start weight override (kg, optional)</small><input type=number step=0.1 style="width:90px" value="${S.s.start||""}" onchange="setS('start',this.value)"></div></div>
+ <h2>Backup</h2><div class=card><div class="row w"><button onclick="exp()">Copy backup</button><button onclick="dl()">Download file</button><button onclick="imp()">Restore (paste)</button></div>
+ <input type=file accept=.json onchange="impF(this)" style="margin-top:10px"><br><small>Last backup: ${S.s.bk?new Date(S.s.bk).toLocaleDateString("en-GB"):"never"}. Data lives in this browser only; clearing site data deletes it.</small></div>
+ <h2>Danger</h2><div class=card><button onclick="reset()">Erase everything</button></div>`}
+
+function render(){const y=scrollY;
+ $("nav").innerHTML=TABS.map(([k,i,l])=>`<button class="${tab==k?"on":""}" onclick="go('${k}')"><b>${i}</b>${l}</button>`).join("");
+ $("app").innerHTML=({today:vToday,diet:vDiet,train:vTrain,prog:vProg,hist:vHist,more:vMore})[tab]();
+ if(tab=="prog")drawProg();scrollTo(0,y)}
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+if("serviceWorker" in navigator&&location.protocol=="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
+render();
+</script></body></html>
