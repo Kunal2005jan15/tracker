@@ -1,133 +1,85 @@
-<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#111">
-<title>Lean Bulk</title>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0d"><title>Lean Bulk</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;font:16px system-ui;background:#111;color:#eee;padding-bottom:70px}
-main{padding:14px;max-width:600px;margin:auto}
-h2{margin:18px 0 8px;font-size:17px;color:#7dd3fc}
-.card{background:#1c1c1e;border-radius:12px;padding:12px;margin-bottom:10px}
-label{display:flex;align-items:center;gap:10px;padding:7px 0}
-input[type=checkbox]{width:22px;height:22px;accent-color:#34d399}
-input[type=text],input[type=number],input[type=date]{background:#2a2a2d;color:#eee;border:0;border-radius:8px;padding:10px;font-size:16px;width:100%}
-button{background:#2a2a2d;color:#eee;border:0;border-radius:8px;padding:10px 14px;font-size:15px}
-button.on{background:#0ea5e9;color:#fff}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#1c1c1e}
-nav button{flex:1;border-radius:0;padding:16px;background:none}
-nav button.on{color:#7dd3fc;background:none}
-.row{display:flex;gap:8px;align-items:center}
-.sets{display:flex;gap:6px;margin:6px 0}
-small{color:#888}
-canvas{width:100%;height:220px}
-</style></head><body><main id="app"></main>
-<nav><button id="b-today" onclick="go('today')">Today</button>
-<button id="b-weight" onclick="go('weight')">Weight</button>
-<button id="b-data" onclick="go('data')">Backup</button></nav>
+:root{--bg:#0b0b0d;--c:#17171a;--c2:#222227;--t:#eee;--m:#8a8a93;--a:#38bdf8;--g:#34d399}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--t);padding-bottom:80px}
+main{max-width:640px;margin:auto;padding:12px}
+h2{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--a);margin:18px 2px 8px}
+.card{background:var(--c);border-radius:14px;padding:12px;margin-bottom:10px}
+.row{display:flex;gap:8px;align-items:center}.sp{justify-content:space-between}.w{flex-wrap:wrap}
+input,select{background:var(--c2);color:var(--t);border:0;border-radius:8px;padding:9px;font-size:16px;width:100%;min-width:0}
+input[type=checkbox]{width:24px;height:24px;accent-color:var(--g);flex:none}
+button{background:var(--c2);color:var(--t);border:0;border-radius:8px;padding:10px 12px;font-size:14px}
+button.on{background:var(--a);color:#001}button.p{background:var(--g);color:#012}
+small,.m{color:var(--m);font-size:12.5px}
+.bar{height:8px;background:var(--c2);border-radius:5px;overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--g)}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border-radius:0;padding:8px 0;font-size:10.5px;color:var(--m)}
+nav button.on{color:var(--a);background:none}nav b{display:block;font-size:18px;font-weight:400}
+canvas{width:100%;height:210px;display:block}
+.set{display:grid;grid-template-columns:20px 1fr 1fr 40px;gap:6px;align-items:center;margin:5px 0}
+.dot{width:14px;height:14px;border-radius:4px;background:var(--c2);display:inline-block;margin:3px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);text-align:center;gap:4px}
+a{color:var(--a)}details summary{color:var(--m);font-size:13px;margin-top:4px}
+#rest{position:fixed;left:12px;right:12px;bottom:72px;background:var(--a);color:#001;border-radius:12px;padding:8px 14px;display:none;font-weight:600;justify-content:space-between;align-items:center}
+</style></head><body>
+<main id="app"></main><div id="rest"></div><nav id="nav"></nav>
 <script>
-const MEALS=["Morning shake","Lunch (rice+dal+curd/paneer)","Snack: 4 chapati + eggs","Dinner"];
+const TABS=[["today","🏠","Today"],["diet","🍛","Diet"],["train","🏋️","Train"],["prog","📈","Progress"],["hist","🗓️","History"],["more","⚙️","More"]];
+const MEALS=[
+{n:"Morning shake",t:"After waking",k:550,p:21,it:["1 glass full-cream milk (boiled, then cooled)","1 large banana","2 tbsp peanut butter","30g oats (powdered or soaked)"]},
+{n:"Lunch",t:"Main carb meal",k:780,p:29,it:["2 big bowls rice","1 big bowl thick dal","Sabzi","1 cup dahi (or swap in 100g paneer)"]},
+{n:"Evening / pre-workout",t:"About 1h before training",k:480,p:14,it:["4 chapati","Sabzi","Creatine 3g with a glass of water"],pick:{veg:["100g paneer (or 40g soya chunks)",265,18],egg:["2 whole eggs, boiled or omelette",140,12],non:["2 whole eggs, boiled or omelette",140,12]}},
+{n:"Dinner",t:"Recovery meal",k:420,p:16,it:["1 bowl rice OR 3 chapati","1 bowl thick dal","Sabzi"],pick:{veg:["100g roasted chana",360,19],egg:["100g roasted chana",360,19],non:["100g chicken breast",165,31]}}];
 const EX={
-A:[["Goblet Squat",4,"15-20"],["Barbell RDL",4,"15"],["DB Overhead Press",3,"12-15"],["Lateral Raise",4,"15-20"]],
-B:[["Floor DB Press",4,"15-20"],["Deficit Push-up",3,"failure"],["Barbell Row",4,"12-15"],["Rear Delt Fly",3,"15"]],
-C:[["Snatch-Grip Deadlift",4,"15"],["Single-Arm Row",3,"12/side"],["Bicep Curl",3,"12-15"],["Overhead Tricep Ext",3,"12-15"]]};
-const NAMES={A:"A Shoulders+Legs",B:"B Back+Chest",C:"C Deadlift+Arms"};
-let S=JSON.parse(localStorage.getItem("lb")||'{"w":{},"d":{}}');
-const save=()=>localStorage.setItem("lb",JSON.stringify(S));
-const today=()=>new Date().toLocaleDateString("en-CA");
-let date=today(),tab="today";
-const day=()=>S.d[date]=S.d[date]||{meals:[0,0,0,0],cr:0,type:({1:"A",3:"B",5:"C"})[new Date(date).getDay()]||null,ex:{}};
+"Goblet Squat":{m:"Quads, glutes",sets:4,lo:15,hi:20,c:"Hold 10kg DB at chest, elbows inside knees, sit between your hips, chest tall, 4s down."},
+"Barbell RDL":{m:"Hamstrings, glutes",sets:4,lo:12,hi:15,c:"Soft knees, push hips back, bar slides down thighs, feel hamstring stretch, flat back. 4s down."},
+"DB Overhead Press":{m:"Shoulders",sets:3,lo:12,hi:15,c:"Seated, ribs down, press up and slightly back, don't arch."},
+"Lateral Raise":{m:"Side delts (V-taper)",sets:4,lo:15,hi:20,c:"Lean slightly forward, lead with elbows, raise to shoulder height, 4s down. Don't swing."},
+"Floor DB Press":{m:"Chest, triceps",sets:4,lo:15,hi:20,c:"Elbows ~45° from torso, pause on floor, squeeze chest at top."},
+"Deficit Push-up":{m:"Chest",sets:3,lo:10,hi:25,r:"failure",c:"Hands on DB handles, chest dips below hands, body in a straight line."},
+"Barbell Row":{m:"Lats, upper back",sets:4,lo:12,hi:15,c:"Hinge to ~45°, pull bar to belly button, squeeze shoulder blades, 4s down."},
+"Rear Delt Fly":{m:"Rear delts",sets:3,lo:15,hi:20,c:"Bent over, slight elbow bend, raise out to sides, pinky up."},
+"Snatch-Grip Deadlift":{m:"Back, glutes, hamstrings",sets:4,lo:12,hi:15,c:"Very wide grip, hips lower than normal deadlift, neutral spine always. Stop the set if your form breaks."},
+"Single-Arm Row":{m:"Lower lats",sets:3,lo:12,hi:15,r:"12-15/side",c:"Support with other hand, drive elbow to hip, pause at top."},
+"Bicep Curl":{m:"Biceps",sets:3,lo:12,hi:15,c:"Elbows pinned to sides, no swing, 4s down."},
+"Overhead Tricep Ext":{m:"Triceps",sets:3,lo:12,hi:15,c:"Elbows pointing forward, lower behind head until a deep stretch."}};
+const PLAN={A:{n:"A · Shoulders + Legs",d:["Goblet Squat","Barbell RDL","DB Overhead Press","Lateral Raise"]},
+B:{n:"B · Back + Chest",d:["Floor DB Press","Deficit Push-up","Barbell Row","Rear Delt Fly"]},
+C:{n:"C · Deadlift + Arms",d:["Snatch-Grip Deadlift","Single-Arm Row","Bicep Curl","Overhead Tricep Ext"]}};
+const MF=[["sh","Shoulders"],["ch","Chest"],["wa","Waist"],["ar","Arm"],["th","Thigh"]];
+
 const $=id=>document.getElementById(id);
+const DEF={w:{},m:{},d:{},s:{mode:"egg",rate:1.5,water:12,start:null,rest:90,bk:0}};
+function load(){let r=null;try{r=JSON.parse(localStorage.getItem("lb2"))}catch(e){}
+ if(!r){r=JSON.parse(JSON.stringify(DEF));try{const o=JSON.parse(localStorage.getItem("lb"));if(o&&o.w)r.w=o.w}catch(e){}}
+ r.s=Object.assign({},DEF.s,r.s);r.m=r.m||{};r.d=r.d||{};r.w=r.w||{};return r}
+let S=load();
+const save=()=>{try{localStorage.setItem("lb2",JSON.stringify(S))}catch(e){alert("Could not save (storage blocked/full)")}};
+const iso=d=>d.toLocaleDateString("en-CA"),parse=s=>new Date(s+"T00:00:00");
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return iso(d)};
+const defType=s=>({1:"A",3:"B",5:"C"})[parse(s).getDay()]||null;
+let date=iso(new Date()),tab="today",pe="Goblet Squat";
+const peek=s=>S.d[s||date]||{meals:[0,0,0,0],water:0,cr:0,sleep:"",type:defType(s||date),ex:{}};
+const D=s=>{s=s||date;return S.d[s]=S.d[s]||{meals:[0,0,0,0],water:0,cr:0,sleep:"",type:defType(s),ex:{}}};
+const bar=f=>`<div class=bar><i style="width:${Math.min(100,Math.max(0,f*100))}%"></i></div>`;
+const done=a=>(a||[]).filter(s=>s&&s.r>0).map(s=>({k:s.k||0,r:s.r}));
+const vol=d=>Math.round(Object.values(d.ex||{}).reduce((a,arr)=>a+done(arr).reduce((b,s)=>b+s.k*s.r,0),0));
+const fd=(s,o)=>parse(s).toLocaleDateString("en-GB",o||{weekday:"short",day:"numeric",month:"short"});
 
-function go(t){tab=t;render()}
-function setDate(v){date=v;render()}
-function tm(i,v){day().meals[i]=v?1:0;save()}
-function tc(v){day().cr=v?1:0;save()}
-function setW(v){v?S.w[date]=+v:delete S.w[date];save()}
-function setType(t){day().type=t;save();render()}
-function ts(n,i,v){const e=exo(n);e.sets[i]=v?1:0;save()}
-function tn(n,v){exo(n).note=v;save()}
-function exo(n){const d=day();return d.ex[n]=d.ex[n]||{sets:[],note:""}}
-function last(n){
-  const ds=Object.keys(S.d).filter(x=>x<date).sort().reverse();
-  for(const x of ds){const e=S.d[x].ex[n];if(e&&e.note)return e.note}
-  return"";
-}
+function mealInfo(i){const m=MEALS[i];let k=m.k,p=m.p;const it=m.it.slice();
+ if(m.pick){const x=m.pick[S.s.mode];it.splice(i==2?2:it.length,0,x[0]);k+=x[1];p+=x[2]}return{k,p,it}}
+const plan=()=>{let k=0,p=0;MEALS.forEach((_,i)=>{const m=mealInfo(i);k+=m.k;p+=m.p});return{k,p}};
+const tot=s=>{let k=0,p=0;peek(s).meals.forEach((v,i)=>{if(v){const m=mealInfo(i);k+=m.k;p+=m.p}});return{k,p}};
+function streak(){const ok=s=>S.d[s]&&S.d[s].meals.filter(Boolean).length>=3;let n=0,s=iso(new Date());if(!ok(s))s=addDays(s,-1);while(ok(s)){n++;s=addDays(s,-1)}return n}
+const needBk=()=>Object.keys(S.d).length>=5&&Date.now()-(S.s.bk||0)>14*864e5;
 
-function render(){
-  ["today","weight","data"].forEach(t=>$("b-"+t).className=tab==t?"on":"");
-  $("app").innerHTML=tab=="today"?vToday():tab=="weight"?vWeight():vData();
-  if(tab=="weight")chart();
-}
-
-function vToday(){
-  const d=day();
-  let h=`<input type=date value="${date}" onchange="setDate(this.value)">
-  <h2>Meals</h2><div class=card>`;
-  MEALS.forEach((m,i)=>h+=`<label><input type=checkbox ${d.meals[i]?"checked":""} onchange="tm(${i},this.checked)">${m}</label>`);
-  h+=`<label><input type=checkbox ${d.cr?"checked":""} onchange="tc(this.checked)">Creatine 3g</label></div>
-  <h2>Body weight (kg)</h2><div class=card><input type=number step=0.1 inputmode=decimal value="${S.w[date]||""}" onchange="setW(this.value)" placeholder="e.g. 60.5"></div>
-  <h2>Workout</h2><div class="row" style="margin-bottom:8px">`;
-  ["A","B","C"].forEach(t=>h+=`<button class="${d.type==t?"on":""}" onclick="setType('${t}')">${t}</button>`);
-  h+=`<button class="${d.type==null?"on":""}" onclick="setType(null)">Rest</button></div>`;
-  if(d.type){
-    h+=`<small>${NAMES[d.type]} · 4-sec lowering on every rep</small>`;
-    EX[d.type].forEach(([n,s,r])=>{
-      const e=exo(n),l=last(n);
-      h+=`<div class=card><b>${n}</b> <small>${s}×${r}</small><div class=sets>`;
-      for(let i=0;i<s;i++)h+=`<input type=checkbox ${e.sets[i]?"checked":""} onchange="ts('${n}',${i},this.checked)">`;
-      h+=`</div><input type=text value="${e.note||""}" placeholder="${l?"last: "+l:"kg x reps"}" onchange="tn('${n}',this.value)"></div>`;
-    });
-  }
-  return h;
-}
-
-function wts(){return Object.entries(S.w).sort((a,b)=>a[0]<b[0]?-1:1)}
-function vWeight(){
-  const w=wts();
-  let h=`<h2>Weight trend</h2><div class=card><canvas id=c></canvas><small>Blue: you · Green: +1.5 kg/month target</small></div>`;
-  if(w.length){
-    const [d0,w0]=w[0],[d1,w1]=w[w.length-1];
-    const mo=(new Date(d1)-new Date(d0))/864e5/30;
-    h+=`<div class=card>Start: <b>${w0}</b> kg<br>Now: <b>${w1}</b> kg<br>Change: <b>${(w1-w0).toFixed(1)}</b> kg`;
-    if(mo>=0.5)h+=`<br>Rate: <b>${((w1-w0)/mo).toFixed(2)}</b> kg/month`;
-    h+=`</div>`;
-  } else h+=`<div class=card>Log your weight in the Today tab.</div>`;
-  return h;
-}
-function chart(){
-  const c=$("c");if(!c)return;
-  const w=wts();if(!w.length)return;
-  const dpr=devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;
-  c.width=W*dpr;c.height=H*dpr;
-  const x=c.getContext("2d");x.scale(dpr,dpr);
-  const t0=new Date(w[0][0]).getTime(),w0=w[0][1];
-  const tl=Math.max(new Date(w[w.length-1][0]).getTime()-t0,864e5*30);
-  const tgt=t=>w0+1.5*((t-t0)/864e5/30);
-  const vals=w.map(p=>p[1]).concat([w0,tgt(t0+tl)]);
-  const mn=Math.min(...vals)-1,mx=Math.max(...vals)+1,p=28;
-  const X=t=>p+(t-t0)/tl*(W-2*p),Y=v=>H-p-(v-mn)/(mx-mn)*(H-2*p);
-  x.fillStyle="#888";x.font="11px system-ui";
-  for(let i=0;i<=4;i++){const v=mn+(mx-mn)*i/4;x.fillText(v.toFixed(1),0,Y(v)+4)}
-  x.strokeStyle="#34d399";x.setLineDash([5,5]);x.beginPath();
-  x.moveTo(X(t0),Y(w0));x.lineTo(X(t0+tl),Y(tgt(t0+tl)));x.stroke();x.setLineDash([]);
-  x.strokeStyle="#0ea5e9";x.lineWidth=2;x.beginPath();
-  w.forEach(([d,v],i)=>{const px=X(new Date(d).getTime()),py=Y(v);i?x.lineTo(px,py):x.moveTo(px,py)});
-  x.stroke();x.fillStyle="#0ea5e9";
-  w.forEach(([d,v])=>{x.beginPath();x.arc(X(new Date(d).getTime()),Y(v),3.5,0,7);x.fill()});
-}
-
-function vData(){
-  return `<h2>Backup</h2><div class=card>
-  <button onclick="exp()">Copy backup to clipboard</button><br><br>
-  <button onclick="imp()">Restore from backup</button></div>
-  <small>Save the copied text in Notes/WhatsApp-to-self.</small>`;
-}
-function exp(){navigator.clipboard.writeText(JSON.stringify(S)).then(()=>alert("Copied"))}
-function imp(){
-  const t=prompt("Paste backup JSON (overwrites current data)");
-  if(!t)return;
-  try{S=JSON.parse(t);save();render();alert("Restored")}catch(e){alert("Invalid data")}
-}
-render();
-</script></body></html>
+/* weight maths */
+const W=()=>Object.entries(S.w).sort((a,b)=>a[0]<b[0]?-1:1).map(([d,v])=>[parse(d).getTime(),v,d]);
+const ma7=w=>w.map(p=>{const s=w.filter(q=>q[0]<=p[0]&&q[0]>p[0]-7*864e5);return[p[0],s.reduce((a,q)=>a+q[1],0)/s.length]});
+function rate(){const w=W();if(w.length<3)return null;const last=w[w.length-1][0],r=w.filter(p=>p[0]>=last-28*864e5);
+ if(r.length<3||r[r.length-1][0]-r[0][0]<10*864e5)return null;
+ const n=r.length,xs=r.map(p=>(p[0]-r[0][0])/864e5)
