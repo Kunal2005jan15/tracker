@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111">
+<title>Lean Bulk</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:16px system-ui;background:#111;color:#eee;padding-bottom:70px}
+main{padding:14px;max-width:600px;margin:auto}
+h2{margin:18px 0 8px;font-size:17px;color:#7dd3fc}
+.card{background:#1c1c1e;border-radius:12px;padding:12px;margin-bottom:10px}
+label{display:flex;align-items:center;gap:10px;padding:7px 0}
+input[type=checkbox]{width:22px;height:22px;accent-color:#34d399}
+input[type=text],input[type=number],input[type=date]{background:#2a2a2d;color:#eee;border:0;border-radius:8px;padding:10px;font-size:16px;width:100%}
+button{background:#2a2a2d;color:#eee;border:0;border-radius:8px;padding:10px 14px;font-size:15px}
+button.on{background:#0ea5e9;color:#fff}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#1c1c1e}
+nav button{flex:1;border-radius:0;padding:16px;background:none}
+nav button.on{color:#7dd3fc;background:none}
+.row{display:flex;gap:8px;align-items:center}
+.sets{display:flex;gap:6px;margin:6px 0}
+small{color:#888}
+canvas{width:100%;height:220px}
+</style></head><body><main id="app"></main>
+<nav><button id="b-today" onclick="go('today')">Today</button>
+<button id="b-weight" onclick="go('weight')">Weight</button>
+<button id="b-data" onclick="go('data')">Backup</button></nav>
+<script>
+const MEALS=["Morning shake","Lunch (rice+dal+curd/paneer)","Snack: 4 chapati + eggs","Dinner"];
+const EX={
+A:[["Goblet Squat",4,"15-20"],["Barbell RDL",4,"15"],["DB Overhead Press",3,"12-15"],["Lateral Raise",4,"15-20"]],
+B:[["Floor DB Press",4,"15-20"],["Deficit Push-up",3,"failure"],["Barbell Row",4,"12-15"],["Rear Delt Fly",3,"15"]],
+C:[["Snatch-Grip Deadlift",4,"15"],["Single-Arm Row",3,"12/side"],["Bicep Curl",3,"12-15"],["Overhead Tricep Ext",3,"12-15"]]};
+const NAMES={A:"A Shoulders+Legs",B:"B Back+Chest",C:"C Deadlift+Arms"};
+let S=JSON.parse(localStorage.getItem("lb")||'{"w":{},"d":{}}');
+const save=()=>localStorage.setItem("lb",JSON.stringify(S));
+const today=()=>new Date().toLocaleDateString("en-CA");
+let date=today(),tab="today";
+const day=()=>S.d[date]=S.d[date]||{meals:[0,0,0,0],cr:0,type:({1:"A",3:"B",5:"C"})[new Date(date).getDay()]||null,ex:{}};
+const $=id=>document.getElementById(id);
+
+function go(t){tab=t;render()}
+function setDate(v){date=v;render()}
+function tm(i,v){day().meals[i]=v?1:0;save()}
+function tc(v){day().cr=v?1:0;save()}
+function setW(v){v?S.w[date]=+v:delete S.w[date];save()}
+function setType(t){day().type=t;save();render()}
+function ts(n,i,v){const e=exo(n);e.sets[i]=v?1:0;save()}
+function tn(n,v){exo(n).note=v;save()}
+function exo(n){const d=day();return d.ex[n]=d.ex[n]||{sets:[],note:""}}
+function last(n){
+  const ds=Object.keys(S.d).filter(x=>x<date).sort().reverse();
+  for(const x of ds){const e=S.d[x].ex[n];if(e&&e.note)return e.note}
+  return"";
+}
+
+function render(){
+  ["today","weight","data"].forEach(t=>$("b-"+t).className=tab==t?"on":"");
+  $("app").innerHTML=tab=="today"?vToday():tab=="weight"?vWeight():vData();
+  if(tab=="weight")chart();
+}
+
+function vToday(){
+  const d=day();
+  let h=`<input type=date value="${date}" onchange="setDate(this.value)">
+  <h2>Meals</h2><div class=card>`;
+  MEALS.forEach((m,i)=>h+=`<label><input type=checkbox ${d.meals[i]?"checked":""} onchange="tm(${i},this.checked)">${m}</label>`);
+  h+=`<label><input type=checkbox ${d.cr?"checked":""} onchange="tc(this.checked)">Creatine 3g</label></div>
+  <h2>Body weight (kg)</h2><div class=card><input type=number step=0.1 inputmode=decimal value="${S.w[date]||""}" onchange="setW(this.value)" placeholder="e.g. 60.5"></div>
+  <h2>Workout</h2><div class="row" style="margin-bottom:8px">`;
+  ["A","B","C"].forEach(t=>h+=`<button class="${d.type==t?"on":""}" onclick="setType('${t}')">${t}</button>`);
+  h+=`<button class="${d.type==null?"on":""}" onclick="setType(null)">Rest</button></div>`;
+  if(d.type){
+    h+=`<small>${NAMES[d.type]} · 4-sec lowering on every rep</small>`;
+    EX[d.type].forEach(([n,s,r])=>{
+      const e=exo(n),l=last(n);
+      h+=`<div class=card><b>${n}</b> <small>${s}×${r}</small><div class=sets>`;
+      for(let i=0;i<s;i++)h+=`<input type=checkbox ${e.sets[i]?"checked":""} onchange="ts('${n}',${i},this.checked)">`;
+      h+=`</div><input type=text value="${e.note||""}" placeholder="${l?"last: "+l:"kg x reps"}" onchange="tn('${n}',this.value)"></div>`;
+    });
+  }
+  return h;
+}
+
+function wts(){return Object.entries(S.w).sort((a,b)=>a[0]<b[0]?-1:1)}
+function vWeight(){
+  const w=wts();
+  let h=`<h2>Weight trend</h2><div class=card><canvas id=c></canvas><small>Blue: you · Green: +1.5 kg/month target</small></div>`;
+  if(w.length){
+    const [d0,w0]=w[0],[d1,w1]=w[w.length-1];
+    const mo=(new Date(d1)-new Date(d0))/864e5/30;
+    h+=`<div class=card>Start: <b>${w0}</b> kg<br>Now: <b>${w1}</b> kg<br>Change: <b>${(w1-w0).toFixed(1)}</b> kg`;
+    if(mo>=0.5)h+=`<br>Rate: <b>${((w1-w0)/mo).toFixed(2)}</b> kg/month`;
+    h+=`</div>`;
+  } else h+=`<div class=card>Log your weight in the Today tab.</div>`;
+  return h;
+}
+function chart(){
+  const c=$("c");if(!c)return;
+  const w=wts();if(!w.length)return;
+  const dpr=devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;
+  c.width=W*dpr;c.height=H*dpr;
+  const x=c.getContext("2d");x.scale(dpr,dpr);
+  const t0=new Date(w[0][0]).getTime(),w0=w[0][1];
+  const tl=Math.max(new Date(w[w.length-1][0]).getTime()-t0,864e5*30);
+  const tgt=t=>w0+1.5*((t-t0)/864e5/30);
+  const vals=w.map(p=>p[1]).concat([w0,tgt(t0+tl)]);
+  const mn=Math.min(...vals)-1,mx=Math.max(...vals)+1,p=28;
+  const X=t=>p+(t-t0)/tl*(W-2*p),Y=v=>H-p-(v-mn)/(mx-mn)*(H-2*p);
+  x.fillStyle="#888";x.font="11px system-ui";
+  for(let i=0;i<=4;i++){const v=mn+(mx-mn)*i/4;x.fillText(v.toFixed(1),0,Y(v)+4)}
+  x.strokeStyle="#34d399";x.setLineDash([5,5]);x.beginPath();
+  x.moveTo(X(t0),Y(w0));x.lineTo(X(t0+tl),Y(tgt(t0+tl)));x.stroke();x.setLineDash([]);
+  x.strokeStyle="#0ea5e9";x.lineWidth=2;x.beginPath();
+  w.forEach(([d,v],i)=>{const px=X(new Date(d).getTime()),py=Y(v);i?x.lineTo(px,py):x.moveTo(px,py)});
+  x.stroke();x.fillStyle="#0ea5e9";
+  w.forEach(([d,v])=>{x.beginPath();x.arc(X(new Date(d).getTime()),Y(v),3.5,0,7);x.fill()});
+}
+
+function vData(){
+  return `<h2>Backup</h2><div class=card>
+  <button onclick="exp()">Copy backup to clipboard</button><br><br>
+  <button onclick="imp()">Restore from backup</button></div>
+  <small>Save the copied text in Notes/WhatsApp-to-self.</small>`;
+}
+function exp(){navigator.clipboard.writeText(JSON.stringify(S)).then(()=>alert("Copied"))}
+function imp(){
+  const t=prompt("Paste backup JSON (overwrites current data)");
+  if(!t)return;
+  try{S=JSON.parse(t);save();render();alert("Restored")}catch(e){alert("Invalid data")}
+}
+render();
+</script></body></html>
